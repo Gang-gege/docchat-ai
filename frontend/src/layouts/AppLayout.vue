@@ -64,11 +64,13 @@
     <main class="app-main">
       <router-view />
     </main>
+    <RobotAssistant />
   </div>
 </template>
 
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
+import RobotAssistant from '../components/RobotAssistant.vue'
 import { THEME_OPTIONS, useThemeStore } from '../stores/theme'
 
 const route = useRoute()
