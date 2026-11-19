@@ -779,27 +779,6 @@ body,
   overflow: hidden;
 }
 
-.quick-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 12px 0 6px;
-}
-
-.quick-tag {
-  cursor: pointer;
-  border-radius: 999px !important;
-  border-color: color-mix(in srgb, var(--brand) 28%, transparent) !important;
-  color: var(--brand) !important;
-  background: var(--brand-soft) !important;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.quick-tag:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 16px rgba(15, 118, 110, 0.12);
-}
-
 @media (max-width: 960px) {
   .chat-layout {
     grid-template-columns: 1fr;

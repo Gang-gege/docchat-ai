@@ -1,5 +1,5 @@
 <template>
-  <div class="robot-root">
+  <div class="robot-root" :data-robot-theme="themeStore.theme">
     <button
       v-show="!open"
       type="button"
@@ -158,6 +158,7 @@ import botGif from '../assets/bot.gif'
 import { openChatStream } from '../api/chat'
 import { useChatStore } from '../stores/chat'
 import { useSettingsStore } from '../stores/settings'
+import { useThemeStore } from '../stores/theme'
 import type { AgentLog, ChatMessage, Citation } from '../types'
 import { renderMarkdown, STAGE_LABEL } from '../utils/markdown'
 
@@ -191,6 +192,7 @@ const THREAD_KEY = 'docchat-robot-thread'
 const router = useRouter()
 const chat = useChatStore()
 const settings = useSettingsStore()
+const themeStore = useThemeStore()
 
 const open = ref(false)
 const posReady = ref(false)
@@ -700,6 +702,68 @@ onBeforeUnmount(() => {
   filter: drop-shadow(0 12px 18px rgba(15, 23, 42, 0.28));
 }
 
+.robot-root[data-robot-theme='dark'] .robot-fab,
+.robot-root[data-robot-theme='ink'] .robot-fab {
+  filter: none;
+}
+
+.robot-root[data-robot-theme='dark'] .robot-fab::before,
+.robot-root[data-robot-theme='ink'] .robot-fab::before,
+.robot-root[data-robot-theme='dark'] .robot-fab::after,
+.robot-root[data-robot-theme='ink'] .robot-fab::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.robot-root[data-robot-theme='dark'] .robot-fab::before,
+.robot-root[data-robot-theme='ink'] .robot-fab::before {
+  z-index: 0;
+  inset: 6px;
+}
+
+.robot-root[data-robot-theme='dark'] .robot-fab::after,
+.robot-root[data-robot-theme='ink'] .robot-fab::after {
+  z-index: 2;
+  inset: 0;
+  mix-blend-mode: multiply;
+}
+
+.robot-root[data-robot-theme='dark'] .robot-fab::before {
+  background: radial-gradient(circle at 50% 36%, rgba(45, 212, 191, 0.42), #07111c 70%);
+  box-shadow:
+    inset 0 0 0 1px rgba(94, 234, 212, 0.72),
+    0 0 0 4px rgba(45, 212, 191, 0.16),
+    0 0 18px rgba(45, 212, 191, 0.38);
+}
+
+.robot-root[data-robot-theme='dark'] .robot-fab::after {
+  background: rgba(8, 78, 74, 0.28);
+}
+
+.robot-root[data-robot-theme='dark'] .robot-fab-img {
+  transform: scale(0.84);
+  filter: sepia(0.55) hue-rotate(125deg) saturate(2.4) brightness(0.82) contrast(1.08);
+}
+
+.robot-root[data-robot-theme='ink'] .robot-fab::before {
+  background: radial-gradient(circle at 50% 36%, rgba(129, 140, 248, 0.5), #10162e 70%);
+  box-shadow:
+    inset 0 0 0 1px rgba(165, 180, 252, 0.8),
+    0 0 0 4px rgba(129, 140, 248, 0.18),
+    0 0 20px rgba(99, 102, 241, 0.48);
+}
+
+.robot-root[data-robot-theme='ink'] .robot-fab::after {
+  background: rgba(55, 48, 163, 0.28);
+}
+
+.robot-root[data-robot-theme='ink'] .robot-fab-img {
+  transform: scale(0.84);
+  filter: sepia(0.7) hue-rotate(195deg) saturate(2.6) brightness(0.88) contrast(1.08);
+}
+
 .robot-fab.is-dragging {
   cursor: grabbing;
 }
@@ -711,12 +775,30 @@ onBeforeUnmount(() => {
 .robot-fab-img,
 .robot-head-bot,
 .robot-avatar {
+  position: relative;
+  z-index: 1;
   display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
   pointer-events: none;
   user-select: none;
+}
+
+.robot-root[data-robot-theme='dark'] .robot-head-bot,
+.robot-root[data-robot-theme='dark'] .robot-avatar:not(.is-user) {
+  border-radius: 50%;
+  background: #07111c;
+  box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.5);
+  filter: sepia(0.55) hue-rotate(125deg) saturate(2.2) brightness(0.86);
+}
+
+.robot-root[data-robot-theme='ink'] .robot-head-bot,
+.robot-root[data-robot-theme='ink'] .robot-avatar:not(.is-user) {
+  border-radius: 50%;
+  background: #10162e;
+  box-shadow: inset 0 0 0 1px rgba(129, 140, 248, 0.6);
+  filter: sepia(0.7) hue-rotate(195deg) saturate(2.4) brightness(0.9);
 }
 
 .robot-panel {

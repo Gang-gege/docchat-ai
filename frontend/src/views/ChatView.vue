@@ -36,22 +36,10 @@
         </div>
       </header>
 
-      <div class="quick-row">
-        <el-tag
-          v-for="p in quickPrompts"
-          :key="p"
-          class="quick-tag"
-          effect="plain"
-          @click="usePrompt(p)"
-        >
-          {{ p }}
-        </el-tag>
-      </div>
-
       <div class="chat-log" ref="logRef">
         <div v-if="!chat.messages.length" class="chat-empty">
           <h3>开始提问</h3>
-          <p>点上方快捷问题，或直接输入。支持多轮追问。</p>
+          <p>直接输入问题即可，支持多轮追问。</p>
         </div>
 
         <div v-for="msg in chat.messages" :key="msg.id" class="msg-row" :class="msg.role">
@@ -120,8 +108,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { openChatStream } from '../api/chat'
-import { fetchStats } from '../api/docs'
-import { QUICK_PROMPTS } from '../constants/prompts'
 import { useChatStore } from '../stores/chat'
 import { useSettingsStore } from '../stores/settings'
 import type { AgentLog, Citation } from '../types'
@@ -133,7 +119,6 @@ const question = ref('')
 const sending = ref(false)
 const currentStage = ref('')
 const logRef = ref<HTMLElement>()
-const quickPrompts = ref([...QUICK_PROMPTS])
 let stopStream: null | (() => void) = null
 let lastUserQuestion = ''
 
@@ -173,10 +158,6 @@ function stop() {
   stopStream = null
   sending.value = false
   currentStage.value = ''
-}
-
-function usePrompt(p: string) {
-  question.value = p
 }
 
 async function copyText(text: string) {
@@ -312,18 +293,11 @@ async function send() {
   )
 }
 
-onMounted(async () => {
+onMounted(() => {
   const prefill = sessionStorage.getItem('docchat-prefill')
   if (prefill) {
     question.value = prefill
     sessionStorage.removeItem('docchat-prefill')
-  }
-  try {
-    const res = await fetchStats()
-    const suggestions = res.data.data.suggestions || []
-    if (suggestions.length) quickPrompts.value = [...QUICK_PROMPTS.slice(0, 2), ...suggestions.slice(0, 4)]
-  } catch {
-    /* ignore */
   }
 })
 
@@ -331,15 +305,6 @@ onBeforeUnmount(() => stop())
 </script>
 
 <style scoped>
-.quick-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px 0 4px;
-}
-.quick-tag {
-  cursor: pointer;
-}
 .msg-tools {
   margin-top: 4px;
 }
