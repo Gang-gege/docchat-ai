@@ -33,6 +33,14 @@
           <span class="menu-ico">⌕</span>
           <span>检索实验室</span>
         </el-menu-item>
+        <el-menu-item index="/eval">
+          <span class="menu-ico">◎</span>
+          <span>效果评测</span>
+        </el-menu-item>
+        <el-menu-item index="/workflows">
+          <span class="menu-ico">⤷</span>
+          <span>工作流</span>
+        </el-menu-item>
         <el-menu-item index="/settings">
           <span class="menu-ico">⚙</span>
           <span>设置</span>

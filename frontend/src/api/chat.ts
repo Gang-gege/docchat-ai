@@ -20,7 +20,7 @@ export interface ChatStreamParams {
   history: Array<{ role: 'user' | 'assistant'; content: string }>
   systemPrompt?: string
   docIds?: string[]
-  answerStyle?: 'brief' | 'standard' | 'outline'
+  answerStyle?: 'brief' | 'standard' | 'outline' | 'detail'
 }
 
 function dispatchEvent(event: string, data: unknown, handlers: StreamHandlers) {

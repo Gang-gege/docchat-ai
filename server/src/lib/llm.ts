@@ -1,4 +1,5 @@
 import { env } from '../config/env.js'
+import { llmConfig } from '../config/runtime.js'
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
@@ -28,14 +29,15 @@ export interface ToolCall {
 }
 
 function chatUrl() {
-  const base = env.llmBaseUrl.endsWith('/v1') ? env.llmBaseUrl : `${env.llmBaseUrl}/v1`
+  const { baseUrl } = llmConfig()
+  const base = baseUrl.endsWith('/v1') ? baseUrl : `${baseUrl}/v1`
   return `${base}/chat/completions`
 }
 
 function headers() {
   return {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${env.llmApiKey}`,
+    Authorization: `Bearer ${llmConfig().apiKey}`,
   }
 }
 
@@ -44,14 +46,14 @@ export async function chatOnce(params: {
   temperature?: number
   tools?: ToolSpec[]
 }) {
-  if (!env.llmApiKey) {
-    throw new Error('未配置 LLM_API_KEY，请在 server/.env 中填写后重试')
+  if (!llmConfig().apiKey) {
+    throw new Error('未配置 LLM_API_KEY，请在 server/.env 或「模型接入」中填写后重试')
   }
   const res = await fetch(chatUrl(), {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify({
-      model: env.llmModel,
+      model: llmConfig().model,
       temperature: params.temperature ?? env.llmTemperature,
       messages: params.messages,
       tools: params.tools,
@@ -88,15 +90,15 @@ export async function chatStream(params: {
   onToken: (text: string) => void
   signal?: AbortSignal
 }) {
-  if (!env.llmApiKey) {
-    throw new Error('未配置 LLM_API_KEY，请在 server/.env 中填写后重试')
+  if (!llmConfig().apiKey) {
+    throw new Error('未配置 LLM_API_KEY，请在 server/.env 或「模型接入」中填写后重试')
   }
   const res = await fetch(chatUrl(), {
     method: 'POST',
     headers: headers(),
     signal: params.signal,
     body: JSON.stringify({
-      model: env.llmModel,
+      model: llmConfig().model,
       temperature: params.temperature ?? env.llmTemperature,
       messages: params.messages,
       stream: true,

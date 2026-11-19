@@ -5,13 +5,15 @@ import { fileURLToPath } from 'node:url'
 import { nanoid } from 'nanoid'
 import { AppError } from '../middleware/error-handler.js'
 import { embedTexts } from '../lib/embeddings.js'
+import { ocrImage } from '../lib/ocr.js'
 import { parsePdf } from '../lib/pdf.js'
 import { splitText } from '../lib/splitter.js'
 import { documentStore } from '../store/document-store.js'
 import { vectorStore } from '../store/vector-store.js'
 import type { DocMeta } from '../types/index.js'
 
-const ALLOWED = new Set(['.md', '.markdown', '.pdf', '.txt'])
+const ALLOWED = new Set(['.md', '.markdown', '.pdf', '.txt', '.png', '.jpg', '.jpeg', '.webp'])
+const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp'])
 const storageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../storage')
 
 /** multer 常把中文文件名按 latin1 解读，需转回 UTF-8 */
@@ -30,17 +32,64 @@ function safeFileName(name: string) {
   return name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').slice(0, 180)
 }
 
+function pullTables(text: string) {
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+  const tableLines = lines.filter((line) => (line.match(/\|/g) || []).length >= 2 || line.split(/\t+/).length >= 3)
+  if (!tableLines.length) return text
+  return `${text}\n\n【提取的表格行】\n${tableLines.join('\n')}`
+}
+
 export async function extractText(filePath: string, originalName: string) {
   const ext = path.extname(originalName).toLowerCase()
   if (!ALLOWED.has(ext)) {
     throw new AppError(40001, `不支持的文件类型: ${ext}`, 400)
   }
+  if (IMAGE_EXT.has(ext)) {
+    const text = await ocrImage(filePath)
+    if (!text) throw new AppError(40001, `图片「${originalName}」没有识别出文字`, 400)
+    return text
+  }
   if (ext === '.pdf') {
     const buf = await fsPromises.readFile(filePath)
     const parsed = await parsePdf(buf)
-    return parsed.text || ''
+    const text = (parsed.text || '').trim()
+    if (text.length < 20) {
+      throw new AppError(40001, `PDF「${originalName}」几乎没有文字层。扫描件请先导出成图片再上传，走 OCR。`, 400)
+    }
+    return pullTables(text)
   }
-  return fsPromises.readFile(filePath, 'utf8')
+  return pullTables(await fsPromises.readFile(filePath, 'utf8'))
+}
+
+export async function ingestPlainText(name: string, text: string) {
+  const tmp = path.join(storageRoot, `_tmp_${Date.now()}.txt`)
+  fs.mkdirSync(storageRoot, { recursive: true })
+  await fsPromises.writeFile(tmp, text, 'utf8')
+  return ingestFile({ path: tmp, originalname: name.endsWith('.txt') ? name : `${name}.txt`, size: Buffer.byteLength(text) })
+}
+
+export async function ingestWebPage(url: string) {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    throw new AppError(40001, '网页地址不合法', 400)
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)) throw new AppError(40001, '只支持 http/https', 400)
+  const res = await fetch(parsed, { headers: { 'User-Agent': 'DocChatBot' } })
+  if (!res.ok) throw new AppError(40001, `抓取失败 ${res.status}`, 400)
+  const html = await res.text()
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 200000)
+  if (text.length < 40) throw new AppError(40001, '页面几乎没有正文', 400)
+  const name = `${parsed.hostname}${parsed.pathname}`.replace(/[^\w.\-\u4e00-\u9fff]+/g, '_').slice(0, 80)
+  return ingestPlainText(name || 'webpage', text)
 }
 
 export async function ingestFile(file: { path: string; originalname: string; size: number }): Promise<DocMeta> {

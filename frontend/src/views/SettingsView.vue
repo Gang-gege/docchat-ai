@@ -100,12 +100,14 @@
         <div class="field-tip">改完点「保存到本地」，再去对话页提问即可生效。</div>
       </div>
     </div>
+    <PlatformSettings />
   </section>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import PlatformSettings from '../components/PlatformSettings.vue'
 import { clearKnowledgeBase, fetchSettings } from '../api/docs'
 import { useSettingsStore } from '../stores/settings'
 

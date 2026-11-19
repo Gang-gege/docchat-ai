@@ -42,6 +42,9 @@ export interface ChatSession {
   title: string
   updatedAt: string
   messages: ChatMessage[]
+  archived?: boolean
+  tags?: string[]
+  docIds?: string[]
 }
 
 export interface PublicSettings {

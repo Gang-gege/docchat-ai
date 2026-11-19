@@ -1,6 +1,7 @@
 import { env } from '../config/env.js'
 import { chatOnce } from '../lib/llm.js'
 import { documentStore } from '../store/document-store.js'
+import { libraryStore } from '../store/library-store.js'
 import { vectorStore } from '../store/vector-store.js'
 
 function excerptOf(docId: string) {
@@ -29,7 +30,7 @@ export async function summarizeDocument(docId: string) {
     messages: [
       {
         role: 'system',
-        content: '你是文档速记员。只根据给定片段写一段 80 到 140 字的中文摘要，不要编造片段里没有的事实。',
+        content: libraryStore.promptByKind('summary') || '你是文档速记员。只根据给定片段写一段 80 到 140 字的中文摘要，不要编造片段里没有的事实。',
       },
       { role: 'user', content: `文档：${doc.name}\n\n${source}` },
     ],

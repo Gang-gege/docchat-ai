@@ -14,6 +14,9 @@ function emptySession(): ChatSession {
     title: '新对话',
     updatedAt: new Date().toISOString(),
     messages: [],
+    archived: false,
+    tags: [],
+    docIds: [],
   }
 }
 
@@ -63,6 +66,26 @@ export const useChatStore = defineStore('chat', () => {
     activeId.value = s.id
     persist()
     return s
+  }
+
+  function patchSession(id: string, partial: Partial<Pick<ChatSession, 'archived' | 'tags' | 'docIds' | 'title'>>) {
+    const s = sessions.value.find((item) => item.id === id)
+    if (!s) return
+    Object.assign(s, partial)
+    s.updatedAt = new Date().toISOString()
+    persist()
+  }
+
+  function removeArchived() {
+    sessions.value = sessions.value.filter((item) => !item.archived)
+    if (!sessions.value.length) {
+      const s = emptySession()
+      sessions.value = [s]
+      activeId.value = s.id
+    } else if (!sessions.value.some((item) => item.id === activeId.value)) {
+      activeId.value = sessions.value[0].id
+    }
+    persist()
   }
 
   function renameSession(id: string, title: string) {
@@ -138,6 +161,8 @@ export const useChatStore = defineStore('chat', () => {
     load,
     persist,
     createSession,
+    patchSession,
+    removeArchived,
     renameSession,
     selectSession,
     removeSession,

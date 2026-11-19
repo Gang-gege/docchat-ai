@@ -3,11 +3,12 @@
     <aside class="session-panel">
       <div class="session-toolbar">
         <span class="session-heading">会话</span>
+        <el-button text size="small" @click="showArchived = !showArchived">{{ showArchived ? '进行中' : '归档' }}</el-button>
         <el-button type="primary" size="small" @click="chat.createSession()">新建</el-button>
       </div>
       <div class="session-list">
         <button
-          v-for="s in chat.sessions"
+          v-for="s in visibleSessions"
           :key="s.id"
           type="button"
           class="session-item"
@@ -24,9 +25,11 @@
             @keydown.enter.prevent="commitRename(s.id)"
           />
           <div v-else class="session-title">{{ s.title }}</div>
+          <div v-if="s.tags?.length" class="session-tags">{{ s.tags.join(' · ') }}</div>
           <div class="session-meta">
             <span>{{ formatTime(s.updatedAt) }}</span>
             <span class="session-del" @click.stop="startRename(s.id, s.title)">重命名</span>
+            <span class="session-del" @click.stop="chat.patchSession(s.id, { archived: !s.archived })">{{ s.archived ? '恢复' : '归档' }}</span>
             <span class="session-del" @click.stop="chat.removeSession(s.id)">删除</span>
           </div>
         </button>
@@ -37,16 +40,19 @@
       <header class="chat-header">
         <div>
           <h1 class="page-title">知识库对话</h1>
-          <p class="chat-subtitle">可限定文档范围，并切换简洁、标准或提纲三种回答。</p>
+          <p class="chat-subtitle">可限定文档、切换简洁 / 标准 / 提纲 / 详解，会话可归档、打标签并导出。</p>
         </div>
         <div class="chat-actions">
           <el-button text @click="exportMd">导出 MD</el-button>
+          <el-button text @click="exportJson">导出 JSON</el-button>
+          <el-button text @click="chat.removeArchived()">清理归档</el-button>
           <el-button text @click="chat.clearActive()">清空</el-button>
           <el-button v-if="sending" type="danger" plain size="small" @click="stop">停止</el-button>
         </div>
       </header>
 
       <div class="chat-tools">
+        <el-input v-model="tagText" placeholder="会话标签，用逗号分隔" style="width: 180px" @change="saveTags(tagText)" />
         <el-segmented v-model="answerStyle" :options="styleOptions" />
         <el-select
           v-model="scopeIds"
@@ -131,7 +137,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { openChatStream } from '../api/chat'
 import { fetchDocs } from '../api/docs'
@@ -148,14 +154,18 @@ const currentStage = ref('')
 const logRef = ref<HTMLElement>()
 const library = ref<DocItem[]>([])
 const scopeIds = ref<string[]>([])
-const answerStyle = ref<'brief' | 'standard' | 'outline'>('standard')
+const answerStyle = ref<'brief' | 'standard' | 'outline' | 'detail'>('standard')
+const showArchived = ref(false)
+const tagText = ref('')
 const editingId = ref('')
 const editingTitle = ref('')
 const styleOptions = [
   { label: '简洁', value: 'brief' },
   { label: '标准', value: 'standard' },
   { label: '提纲', value: 'outline' },
+  { label: '详解', value: 'detail' },
 ]
+const visibleSessions = computed(() => chat.sessions.filter((item) => Boolean(item.archived) === showArchived.value))
 let stopStream: null | (() => void) = null
 let lastUserQuestion = ''
 
@@ -211,6 +221,26 @@ function stop() {
 async function copyText(text: string) {
   await navigator.clipboard.writeText(text)
   ElMessage.success('已复制')
+}
+
+function saveTags(value: string) {
+  const tags = value
+    .split(/[,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 6)
+  if (chat.activeId) chat.patchSession(chat.activeId, { tags })
+}
+
+function exportJson() {
+  const payload = showArchived.value ? chat.sessions.filter((item) => item.archived) : chat.sessions.filter((item) => !item.archived)
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `docchat-sessions-${Date.now()}.json`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 function exportMd() {
@@ -343,6 +373,19 @@ async function send() {
   )
 }
 
+watch(scopeIds, (ids) => {
+  if (chat.activeId) chat.patchSession(chat.activeId, { docIds: [...ids] })
+})
+
+watch(
+  () => chat.activeId,
+  (id) => {
+    const session = chat.sessions.find((item) => item.id === id)
+    scopeIds.value = session?.docIds ? [...session.docIds] : []
+    tagText.value = (session?.tags || []).join('，')
+  },
+)
+
 onMounted(async () => {
   const prefill = sessionStorage.getItem('docchat-prefill')
   if (prefill) {
@@ -350,6 +393,8 @@ onMounted(async () => {
     sessionStorage.removeItem('docchat-prefill')
   }
   const scoped = sessionStorage.getItem('docchat-scope')
+  const current = chat.sessions.find((item) => item.id === chat.activeId)
+  tagText.value = (current?.tags || []).join('，')
   if (scoped) {
     sessionStorage.removeItem('docchat-scope')
     try {
@@ -358,6 +403,8 @@ onMounted(async () => {
     } catch {
       /* ignore */
     }
+  } else if (current?.docIds?.length) {
+    scopeIds.value = [...current.docIds]
   }
   try {
     const res = await fetchDocs()

@@ -3,7 +3,7 @@
     <header class="kb-header">
       <div>
         <h1 class="page-title">知识库管理</h1>
-        <p class="kb-desc">支持 PDF / Markdown / TXT。上传后写入 SQLite（documents + chunks）并保存原文件。</p>
+        <p class="kb-desc">支持 PDF、Markdown、TXT 和图片。图片走 OCR，扫描版 PDF 请先导出成图片再上传。</p>
       </div>
       <div class="kb-actions">
         <el-input v-model="keyword" clearable placeholder="搜索文档名" style="width: 220px" @change="refresh" />
@@ -12,6 +12,8 @@
           <el-option label="只看收藏" :value="true" />
         </el-select>
         <el-button @click="refresh">刷新</el-button>
+        <el-button :disabled="!selectedIds.length" @click="reindexSelected">批量重解析</el-button>
+        <el-button :disabled="!selectedIds.length" @click="summarizeSelected">批量摘要</el-button>
         <el-button type="danger" plain :disabled="!selectedIds.length" @click="handleBatchDelete">
           批量删除 ({{ selectedIds.length }})
         </el-button>
@@ -41,7 +43,7 @@
       drag
       multiple
       :auto-upload="false"
-      accept=".md,.markdown,.pdf,.txt"
+      accept=".md,.markdown,.pdf,.txt,.png,.jpg,.jpeg,.webp"
       :on-change="onFileChange"
       :file-list="fileList"
       style="margin: 8px 0 16px"
@@ -49,9 +51,13 @@
       <div class="el-upload__text">拖拽或点击上传（支持多文件）</div>
     </el-upload>
 
-    <el-button type="primary" :loading="uploading" :disabled="!pendingFiles.length" @click="handleUpload">
-      开始入库
-    </el-button>
+    <div class="ingest-row">
+      <el-button type="primary" :loading="uploading" :disabled="!pendingFiles.length" @click="handleUpload">
+        开始入库
+      </el-button>
+      <el-input v-model="pageUrl" clearable placeholder="https:// 网页地址，抓取正文入库" @keyup.enter="pullPage" />
+      <el-button :loading="pulling" @click="pullPage">抓取网页</el-button>
+    </div>
 
     <el-table
       :data="docs"
@@ -134,6 +140,7 @@ import {
   summarizeDoc,
   uploadDocs,
 } from '../api/docs'
+import { batchReindex, batchSummarize, ingestUrl } from '../api/platform'
 import type { DocItem, KnowledgeStats } from '../types'
 
 const router = useRouter()
@@ -141,6 +148,8 @@ const docs = ref<DocItem[]>([])
 const stats = ref<KnowledgeStats | null>(null)
 const keyword = ref('')
 const favOnly = ref(false)
+const pageUrl = ref('')
+const pulling = ref(false)
 const summarizing = ref(false)
 const noteDraft = ref('')
 const fileList = ref<UploadUserFile[]>([])
@@ -172,6 +181,33 @@ async function refresh() {
 
 async function toggleFavorite(row: DocItem) {
   await patchDoc(row.docId, { favorite: !row.favorite })
+  await refresh()
+}
+
+async function pullPage() {
+  const url = pageUrl.value.trim()
+  if (!url) return
+  pulling.value = true
+  try {
+    await ingestUrl(url)
+    pageUrl.value = ''
+    ElMessage.success('网页已入库')
+    await refresh()
+  } finally {
+    pulling.value = false
+  }
+}
+
+async function reindexSelected() {
+  const res = await batchReindex(selectedIds.value)
+  const errors = res.data.data.errors || []
+  ElMessage.success(`已重解析 ${res.data.data.docs.length} 篇${errors.length ? `，${errors.length} 篇失败` : ''}`)
+  await refresh()
+}
+
+async function summarizeSelected() {
+  const res = await batchSummarize(selectedIds.value)
+  ElMessage.success(`已生成 ${res.data.data.count} 条摘要`)
   await refresh()
 }
 
@@ -259,7 +295,7 @@ function formatSize(size: number) {
 onMounted(refresh)
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
 .kb-header {
   display: flex;
   justify-content: space-between;
@@ -276,6 +312,13 @@ onMounted(refresh)
   gap: 8px;
   align-items: center;
   flex-wrap: wrap;
+}
+.ingest-row {
+  display: grid;
+  grid-template-columns: auto minmax(220px, 420px) auto;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
 }
 .chunk-card {
   background: linear-gradient(180deg, #ffffff, #f8fafc);
@@ -315,6 +358,9 @@ onMounted(refresh)
 @media (max-width: 900px) {
   .kb-header {
     flex-direction: column;
+  }
+  .ingest-row {
+    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -7,12 +7,15 @@ import { errorHandler } from './middleware/error-handler.js'
 import { chatRouter } from './routes/chat.js'
 import { docsRouter } from './routes/docs.js'
 import { healthRouter } from './routes/health.js'
+import { platformRouter } from './routes/platform.js'
 import { settingsRouter } from './routes/settings.js'
 import { statsRouter } from './routes/stats.js'
+import { ensureLibrary } from './store/library-store.js'
 
 async function bootstrap() {
   await initDatabase()
   await migrateLegacyJsonIfNeeded()
+  ensureLibrary()
 
   const app = express()
   app.use(cors({ origin: true }))
@@ -23,6 +26,7 @@ async function bootstrap() {
   app.use('/api', statsRouter)
   app.use('/api', docsRouter)
   app.use('/api', chatRouter)
+  app.use('/api', platformRouter)
 
   app.use(errorHandler)
 

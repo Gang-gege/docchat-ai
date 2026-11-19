@@ -2,6 +2,7 @@ import { env } from '../config/env.js'
 import { embedQuery } from '../lib/embeddings.js'
 import { chatStream, type ChatMessage } from '../lib/llm.js'
 import { buildRagUserPrompt, RAG_SYSTEM_PROMPT } from '../prompts/rag.js'
+import { libraryStore } from '../store/library-store.js'
 import { vectorStore } from '../store/vector-store.js'
 import type { ChatRuntimeOptions, Citation } from '../types/index.js'
 import { maybeRunAgent } from './agent.service.js'
@@ -31,6 +32,7 @@ function clipContexts(items: Citation[]) {
 const STYLE_HINT: Record<string, string> = {
   brief: '回答风格：用不超过 120 字给出结论，不要展开背景。',
   outline: '回答风格：先用一句话给结论，再用 Markdown 列出 3 到 6 个要点。',
+  detail: '回答风格：按背景、要点、依据分节详细解读，并引用片段编号。',
 }
 
 function withAnswerStyle(prompt: string, style?: string) {
@@ -123,7 +125,10 @@ export async function runChatStream(options: ChatRuntimeOptions, sse: SseWriter,
 
   throwIfAborted()
   sse.send('status', { stage: 'generate' })
-  const systemPrompt = withAnswerStyle((options.systemPrompt || '').trim() || RAG_SYSTEM_PROMPT, options.answerStyle)
+  const systemPrompt = withAnswerStyle(
+    (options.systemPrompt || '').trim() || libraryStore.promptByKind('qa') || RAG_SYSTEM_PROMPT,
+    options.answerStyle,
+  )
   const messages: ChatMessage[] = [
     { role: 'system', content: systemPrompt },
     {

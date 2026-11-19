@@ -1,0 +1,4 @@
+@mixin scroll-pane {
+  min-height: 0;
+  overflow: auto;
+}

@@ -25,7 +25,7 @@ function parseDocIds(raw: unknown) {
 }
 
 function parseAnswerStyle(raw: unknown) {
-  return raw === 'brief' || raw === 'outline' || raw === 'standard' ? raw : undefined
+  return raw === 'brief' || raw === 'outline' || raw === 'detail' || raw === 'standard' ? raw : undefined
 }
 
 function setupSse(res: import('express').Response) {

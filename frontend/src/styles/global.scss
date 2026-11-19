@@ -1,3 +1,5 @@
+@use './mixins' as *;
+
 :root,
 html[data-theme='light'] {
   --bg0: #e8eef6;
@@ -141,6 +143,7 @@ body,
 }
 
 .app-menu {
+  @include scroll-pane;
   border-right: none !important;
   flex: 1;
 }
@@ -304,6 +307,15 @@ body,
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-tags {
+  margin: -2px 0 6px;
+  color: var(--brand);
+  font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

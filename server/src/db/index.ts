@@ -65,3 +65,15 @@ export async function initDatabase() {
 export function dbPathInfo() {
   return dbPath
 }
+
+export function replaceDatabase(bytes: Uint8Array) {
+  if (!SQL) throw new Error('数据库尚未初始化')
+  db?.close()
+  db = new SQL.Database(bytes)
+  const schema = fs.readFileSync(schemaPath, 'utf8')
+  db.exec(schema)
+  ensureColumn(db, 'documents', 'summary', "summary TEXT NOT NULL DEFAULT ''")
+  ensureColumn(db, 'documents', 'note', "note TEXT NOT NULL DEFAULT ''")
+  ensureColumn(db, 'documents', 'favorite', 'favorite INTEGER NOT NULL DEFAULT 0')
+  persistDb()
+}

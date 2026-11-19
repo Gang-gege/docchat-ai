@@ -1,4 +1,4 @@
-import { env } from '../config/env.js'
+import { llmConfig } from '../config/runtime.js'
 
 const DIM = 256
 
@@ -36,15 +36,16 @@ export function localEmbed(text: string) {
 }
 
 async function remoteEmbed(texts: string[]) {
-  const base = env.embeddingBaseUrl.endsWith('/v1') ? env.embeddingBaseUrl : `${env.embeddingBaseUrl}/v1`
+  const cfg = llmConfig()
+  const base = cfg.embeddingBaseUrl.endsWith('/v1') ? cfg.embeddingBaseUrl : `${cfg.embeddingBaseUrl}/v1`
   const res = await fetch(`${base}/embeddings`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${env.embeddingApiKey}`,
+      Authorization: `Bearer ${cfg.embeddingApiKey}`,
     },
     body: JSON.stringify({
-      model: env.embeddingModel,
+      model: cfg.embeddingModel,
       input: texts,
     }),
   })
@@ -58,7 +59,8 @@ async function remoteEmbed(texts: string[]) {
 
 export async function embedTexts(texts: string[]) {
   if (!texts.length) return []
-  const useRemote = !env.useLocalEmbedding && Boolean(env.embeddingApiKey)
+  const cfg = llmConfig()
+  const useRemote = !cfg.useLocalEmbedding && Boolean(cfg.embeddingApiKey)
   if (useRemote) return remoteEmbed(texts)
   return texts.map(localEmbed)
 }
@@ -69,5 +71,6 @@ export async function embedQuery(text: string) {
 }
 
 export function embeddingBackend() {
-  return !env.useLocalEmbedding && env.embeddingApiKey ? 'remote' : 'local'
+  const cfg = llmConfig()
+  return !cfg.useLocalEmbedding && cfg.embeddingApiKey ? 'remote' : 'local'
 }
