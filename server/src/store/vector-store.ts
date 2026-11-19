@@ -101,8 +101,10 @@ export const vectorStore = {
     db.run('DELETE FROM chunks WHERE doc_id = ?', [docId])
     persistDb()
   },
-  async search(queryEmbedding: number[], topK: number): Promise<Citation[]> {
+  async search(queryEmbedding: number[], topK: number, docIds?: string[]): Promise<Citation[]> {
+    const allow = docIds?.length ? new Set(docIds) : null
     return readAllChunks()
+      .filter((chunk) => !allow || allow.has(chunk.docId))
       .map((chunk) => ({
         docId: chunk.docId,
         docName: chunk.docName,

@@ -11,6 +11,7 @@ import {
   removeDoc,
   removeDocs,
 } from '../services/ingest.service.js'
+import { summarizeDocument } from '../services/summary.service.js'
 import { documentStore } from '../store/document-store.js'
 import { vectorStore } from '../store/vector-store.js'
 
@@ -55,6 +56,28 @@ docsRouter.get('/doc/:docId/download', (req, res, next) => {
       throw new AppError(40401, '原文件不存在', 404)
     }
     res.download(doc.storagePath, doc.name)
+  } catch (err) {
+    next(err)
+  }
+})
+
+docsRouter.patch('/doc/:docId', (req, res, next) => {
+  try {
+    const favorite = typeof req.body?.favorite === 'boolean' ? req.body.favorite : undefined
+    const note = typeof req.body?.note === 'string' ? req.body.note : undefined
+    const doc = documentStore.patch(req.params.docId, { favorite, note })
+    if (!doc) throw new AppError(40401, '文档不存在', 404)
+    ok(res, { doc })
+  } catch (err) {
+    next(err)
+  }
+})
+
+docsRouter.post('/doc/:docId/summary', async (req, res, next) => {
+  try {
+    const doc = await summarizeDocument(req.params.docId)
+    if (!doc) throw new AppError(40401, '文档不存在', 404)
+    ok(res, { doc }, '摘要已生成')
   } catch (err) {
     next(err)
   }

@@ -30,6 +30,11 @@
       <el-table-column type="index" width="60" label="#" />
       <el-table-column prop="docName" label="文档" min-width="180" />
       <el-table-column prop="content" label="命中片段" min-width="360" show-overflow-tooltip />
+      <el-table-column label="操作" width="90">
+        <template #default="{ row }">
+          <el-button link type="primary" @click="askHit(row)">追问</el-button>
+        </template>
+      </el-table-column>
     </el-table>
   </section>
 </template>
@@ -59,6 +64,12 @@ async function runSearch() {
   } finally {
     loading.value = false
   }
+}
+
+function askHit(row: { docId: string; docName: string; content: string }) {
+  sessionStorage.setItem('docchat-prefill', `根据《${row.docName}》说明：${row.content.slice(0, 48)}`)
+  sessionStorage.setItem('docchat-scope', JSON.stringify([row.docId]))
+  router.push('/chat')
 }
 
 function askSemantic() {

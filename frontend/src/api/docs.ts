@@ -55,6 +55,14 @@ export function uploadDocs(files: File[]) {
   })
 }
 
+export function patchDoc(docId: string, body: { favorite?: boolean; note?: string }) {
+  return http.patch<ApiBody<{ doc: DocItem }>>(`/doc/${docId}`, body)
+}
+
+export function summarizeDoc(docId: string) {
+  return http.post<ApiBody<{ doc: DocItem }>>(`/doc/${docId}/summary`)
+}
+
 export function deleteDoc(docId: string) {
   return http.delete<ApiBody<{ docId: string }>>(`/doc/${docId}`)
 }

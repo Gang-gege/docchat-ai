@@ -14,9 +14,19 @@
           :class="{ active: s.id === chat.activeId }"
           @click="chat.selectSession(s.id)"
         >
-          <div class="session-title">{{ s.title }}</div>
+          <input
+            v-if="editingId === s.id"
+            v-model="editingTitle"
+            class="session-rename"
+            maxlength="40"
+            @click.stop
+            @blur="commitRename(s.id)"
+            @keydown.enter.prevent="commitRename(s.id)"
+          />
+          <div v-else class="session-title">{{ s.title }}</div>
           <div class="session-meta">
             <span>{{ formatTime(s.updatedAt) }}</span>
+            <span class="session-del" @click.stop="startRename(s.id, s.title)">重命名</span>
             <span class="session-del" @click.stop="chat.removeSession(s.id)">删除</span>
           </div>
         </button>
@@ -27,7 +37,7 @@
       <header class="chat-header">
         <div>
           <h1 class="page-title">知识库对话</h1>
-          <p class="chat-subtitle">RAG 溯源 · Agent 工具 · 多轮记忆 · 可导出</p>
+          <p class="chat-subtitle">可限定文档范围，并切换简洁、标准或提纲三种回答。</p>
         </div>
         <div class="chat-actions">
           <el-button text @click="exportMd">导出 MD</el-button>
@@ -35,6 +45,22 @@
           <el-button v-if="sending" type="danger" plain size="small" @click="stop">停止</el-button>
         </div>
       </header>
+
+      <div class="chat-tools">
+        <el-segmented v-model="answerStyle" :options="styleOptions" />
+        <el-select
+          v-model="scopeIds"
+          multiple
+          collapse-tags
+          collapse-tags-tooltip
+          clearable
+          filterable
+          placeholder="检索范围：全部文档"
+          class="scope-select"
+        >
+          <el-option v-for="doc in library" :key="doc.docId" :label="doc.name" :value="doc.docId" />
+        </el-select>
+      </div>
 
       <div class="chat-log" ref="logRef">
         <div v-if="!chat.messages.length" class="chat-empty">
@@ -108,9 +134,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { openChatStream } from '../api/chat'
+import { fetchDocs } from '../api/docs'
 import { useChatStore } from '../stores/chat'
 import { useSettingsStore } from '../stores/settings'
-import type { AgentLog, Citation } from '../types'
+import type { AgentLog, Citation, DocItem } from '../types'
 import { renderMarkdown, STAGE_LABEL } from '../utils/markdown'
 
 const chat = useChatStore()
@@ -119,6 +146,16 @@ const question = ref('')
 const sending = ref(false)
 const currentStage = ref('')
 const logRef = ref<HTMLElement>()
+const library = ref<DocItem[]>([])
+const scopeIds = ref<string[]>([])
+const answerStyle = ref<'brief' | 'standard' | 'outline'>('standard')
+const editingId = ref('')
+const editingTitle = ref('')
+const styleOptions = [
+  { label: '简洁', value: 'brief' },
+  { label: '标准', value: 'standard' },
+  { label: '提纲', value: 'outline' },
+]
 let stopStream: null | (() => void) = null
 let lastUserQuestion = ''
 
@@ -151,6 +188,17 @@ function uid() {
 async function scrollBottom() {
   await nextTick()
   if (logRef.value) logRef.value.scrollTop = logRef.value.scrollHeight
+}
+
+function startRename(id: string, title: string) {
+  editingId.value = id
+  editingTitle.value = title
+}
+
+function commitRename(id: string) {
+  if (editingId.value !== id) return
+  chat.renameSession(id, editingTitle.value)
+  editingId.value = ''
 }
 
 function stop() {
@@ -239,6 +287,8 @@ async function send() {
       scoreThreshold: settings.scoreThreshold,
       history,
       systemPrompt: settings.systemPrompt,
+      docIds: scopeIds.value,
+      answerStyle: answerStyle.value,
     },
     {
       onStatus(stage) {
@@ -293,11 +343,27 @@ async function send() {
   )
 }
 
-onMounted(() => {
+onMounted(async () => {
   const prefill = sessionStorage.getItem('docchat-prefill')
   if (prefill) {
     question.value = prefill
     sessionStorage.removeItem('docchat-prefill')
+  }
+  const scoped = sessionStorage.getItem('docchat-scope')
+  if (scoped) {
+    sessionStorage.removeItem('docchat-scope')
+    try {
+      const ids = JSON.parse(scoped) as string[]
+      if (Array.isArray(ids)) scopeIds.value = ids.filter((id) => typeof id === 'string')
+    } catch {
+      /* ignore */
+    }
+  }
+  try {
+    const res = await fetchDocs()
+    library.value = res.data.data.list
+  } catch {
+    library.value = []
   }
 })
 
@@ -305,6 +371,26 @@ onBeforeUnmount(() => stop())
 </script>
 
 <style scoped>
+.chat-tools {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 0 4px;
+}
+.scope-select {
+  width: 280px;
+}
+.session-rename {
+  width: 100%;
+  margin-bottom: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
 .msg-tools {
   margin-top: 4px;
 }

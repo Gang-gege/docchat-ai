@@ -7,6 +7,10 @@
       </div>
       <div class="kb-actions">
         <el-input v-model="keyword" clearable placeholder="搜索文档名" style="width: 220px" @change="refresh" />
+        <el-select v-model="favOnly" style="width: 120px" @change="refresh">
+          <el-option label="全部" :value="false" />
+          <el-option label="只看收藏" :value="true" />
+        </el-select>
         <el-button @click="refresh">刷新</el-button>
         <el-button type="danger" plain :disabled="!selectedIds.length" @click="handleBatchDelete">
           批量删除 ({{ selectedIds.length }})
@@ -63,10 +67,17 @@
       </el-table-column>
       <el-table-column prop="chunkCount" label="切片数" width="90" />
       <el-table-column prop="createdAt" label="入库时间" min-width="170" />
-      <el-table-column label="操作" width="280" fixed="right">
+      <el-table-column label="收藏" width="80">
+        <template #default="{ row }">
+          <el-button link :type="row.favorite ? 'warning' : 'info'" @click="toggleFavorite(row)">
+            {{ row.favorite ? '已藏' : '收藏' }}
+          </el-button>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" width="320" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openDetail(row.docId)">详情</el-button>
-          <el-button link @click="askAbout(row.name)">提问</el-button>
+          <el-button link @click="askAbout(row)">提问</el-button>
           <el-button link @click="handleDownload(row)">下载</el-button>
           <el-button link @click="handleReindex(row.docId)">重索引</el-button>
           <el-button link type="danger" @click="handleDelete(row.docId)">删除</el-button>
@@ -78,6 +89,25 @@
       <template v-if="detail">
         <p><b>名称：</b>{{ detail.doc.name }}</p>
         <p><b>切片：</b>{{ detail.doc.chunkCount }} · <b>原文件：</b>{{ detail.hasFile ? '已保存' : '缺失' }}</p>
+        <div class="detail-block">
+          <div class="detail-label">
+            <span>摘要</span>
+            <el-button link type="primary" :loading="summarizing" @click="handleSummary">生成摘要</el-button>
+          </div>
+          <p class="detail-text">{{ detail.doc.summary || '还没有摘要。生成后会保存在这篇文档上。' }}</p>
+        </div>
+        <div class="detail-block">
+          <div class="detail-label"><span>笔记</span></div>
+          <el-input
+            v-model="noteDraft"
+            type="textarea"
+            :rows="3"
+            maxlength="1000"
+            show-word-limit
+            placeholder="记一下这篇文档怎么用、对应哪个业务"
+          />
+          <el-button size="small" style="margin-top: 8px" @click="saveNote">保存笔记</el-button>
+        </div>
         <el-divider />
         <div v-for="(c, i) in detail.chunks" :key="c.id" class="chunk-card">
           <div class="chunk-title">#{{ i + 1 }} · {{ c.id }}</div>
@@ -99,7 +129,9 @@ import {
   fetchDocDetail,
   fetchDocs,
   fetchStats,
+  patchDoc,
   reindexDoc,
+  summarizeDoc,
   uploadDocs,
 } from '../api/docs'
 import type { DocItem, KnowledgeStats } from '../types'
@@ -108,6 +140,9 @@ const router = useRouter()
 const docs = ref<DocItem[]>([])
 const stats = ref<KnowledgeStats | null>(null)
 const keyword = ref('')
+const favOnly = ref(false)
+const summarizing = ref(false)
+const noteDraft = ref('')
 const fileList = ref<UploadUserFile[]>([])
 const pendingFiles = ref<File[]>([])
 const uploading = ref(false)
@@ -130,8 +165,14 @@ function onSelect(rows: DocItem[]) {
 
 async function refresh() {
   const [docsRes, statsRes] = await Promise.all([fetchDocs(keyword.value), fetchStats()])
-  docs.value = docsRes.data.data.list
+  const list = docsRes.data.data.list
+  docs.value = favOnly.value ? list.filter((item) => item.favorite) : list
   stats.value = statsRes.data.data
+}
+
+async function toggleFavorite(row: DocItem) {
+  await patchDoc(row.docId, { favorite: !row.favorite })
+  await refresh()
 }
 
 async function handleUpload() {
@@ -165,7 +206,28 @@ async function handleBatchDelete() {
 async function openDetail(docId: string) {
   const res = await fetchDocDetail(docId)
   detail.value = res.data.data
+  noteDraft.value = res.data.data.doc.note || ''
   detailVisible.value = true
+}
+
+async function handleSummary() {
+  if (!detail.value) return
+  summarizing.value = true
+  try {
+    const res = await summarizeDoc(detail.value.doc.docId)
+    detail.value.doc = { ...detail.value.doc, ...res.data.data.doc }
+    ElMessage.success('摘要已更新')
+    await refresh()
+  } finally {
+    summarizing.value = false
+  }
+}
+
+async function saveNote() {
+  if (!detail.value) return
+  const res = await patchDoc(detail.value.doc.docId, { note: noteDraft.value })
+  detail.value.doc = { ...detail.value.doc, ...res.data.data.doc }
+  ElMessage.success('笔记已保存')
 }
 
 async function handleDownload(row: DocItem) {
@@ -182,8 +244,9 @@ async function handleReindex(docId: string) {
   await refresh()
 }
 
-function askAbout(name: string) {
-  sessionStorage.setItem('docchat-prefill', `「${name}」主要讲解了哪些内容？`)
+function askAbout(row: DocItem) {
+  sessionStorage.setItem('docchat-prefill', `「${row.name}」主要讲解了哪些内容？`)
+  sessionStorage.setItem('docchat-scope', JSON.stringify([row.docId]))
   router.push('/chat')
 }
 
@@ -232,6 +295,22 @@ onMounted(refresh)
   white-space: pre-wrap;
   font-size: 12px;
   line-height: 1.6;
+}
+.detail-block {
+  margin-top: 12px;
+}
+.detail-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.detail-text {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.65;
+  font-size: 13px;
 }
 @media (max-width: 900px) {
   .kb-header {

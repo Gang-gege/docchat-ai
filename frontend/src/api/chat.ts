@@ -19,6 +19,8 @@ export interface ChatStreamParams {
   scoreThreshold: number
   history: Array<{ role: 'user' | 'assistant'; content: string }>
   systemPrompt?: string
+  docIds?: string[]
+  answerStyle?: 'brief' | 'standard' | 'outline'
 }
 
 function dispatchEvent(event: string, data: unknown, handlers: StreamHandlers) {

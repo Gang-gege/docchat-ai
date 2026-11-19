@@ -28,6 +28,16 @@ function clipContexts(items: Citation[]) {
   return kept
 }
 
+const STYLE_HINT: Record<string, string> = {
+  brief: '回答风格：用不超过 120 字给出结论，不要展开背景。',
+  outline: '回答风格：先用一句话给结论，再用 Markdown 列出 3 到 6 个要点。',
+}
+
+function withAnswerStyle(prompt: string, style?: string) {
+  const hint = style ? STYLE_HINT[style] : ''
+  return hint ? `${prompt}\n\n${hint}` : prompt
+}
+
 function formatHistory(history: { role: string; content: string }[]) {
   return history
     .slice(-6)
@@ -91,7 +101,11 @@ export async function runChatStream(options: ChatRuntimeOptions, sse: SseWriter,
   throwIfAborted()
   sse.send('status', { stage: 'retrieve' })
   const queryVec = await embedQuery(retrieveQuery)
-  let citations = await vectorStore.search(queryVec, topK)
+  const docIds = options.docIds?.filter(Boolean)
+  if (docIds?.length) {
+    sse.send('agent', { thought: `检索范围限定为 ${docIds.length} 篇文档` })
+  }
+  let citations = await vectorStore.search(queryVec, topK, docIds)
   // 阈值过高（尤其本地简易向量）会导致「有文档却 0 命中」
   const effectiveThreshold = Math.min(Math.max(scoreThreshold, 0), 0.35)
   if (effectiveThreshold > 0) {
@@ -109,7 +123,7 @@ export async function runChatStream(options: ChatRuntimeOptions, sse: SseWriter,
 
   throwIfAborted()
   sse.send('status', { stage: 'generate' })
-  const systemPrompt = (options.systemPrompt || '').trim() || RAG_SYSTEM_PROMPT
+  const systemPrompt = withAnswerStyle((options.systemPrompt || '').trim() || RAG_SYSTEM_PROMPT, options.answerStyle)
   const messages: ChatMessage[] = [
     { role: 'system', content: systemPrompt },
     {

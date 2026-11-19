@@ -6,6 +6,9 @@ export interface DocMeta {
   chunkCount: number
   createdAt: string
   storagePath?: string
+  summary?: string
+  note?: string
+  favorite?: boolean
 }
 
 export interface VectorChunk {
@@ -51,6 +54,10 @@ export interface ChatRuntimeOptions {
   scoreThreshold?: number
   /** 前端可覆盖的系统提示词 */
   systemPrompt?: string
+  /** 限定检索的文档；空则全库 */
+  docIds?: string[]
+  /** brief | standard | outline */
+  answerStyle?: string
 }
 
 export interface ToolDefinition {

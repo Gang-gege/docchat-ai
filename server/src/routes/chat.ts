@@ -15,6 +15,19 @@ function parseHistory(raw: unknown): ChatHistoryItem[] {
     .slice(-12)
 }
 
+function parseDocIds(raw: unknown) {
+  if (!Array.isArray(raw)) return undefined
+  const ids = raw
+    .filter((item) => typeof item === 'string' && item.trim())
+    .map((item) => String(item).trim())
+    .slice(0, 20)
+  return ids.length ? ids : undefined
+}
+
+function parseAnswerStyle(raw: unknown) {
+  return raw === 'brief' || raw === 'outline' || raw === 'standard' ? raw : undefined
+}
+
 function setupSse(res: import('express').Response) {
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
   res.setHeader('Cache-Control', 'no-cache, no-transform')
@@ -40,6 +53,8 @@ async function handleChat(
     scoreThreshold?: number
     history?: ChatHistoryItem[]
     systemPrompt?: string
+    docIds?: string[]
+    answerStyle?: string
   },
 ) {
   const send = setupSse(res)
@@ -89,5 +104,7 @@ chatRouter.post('/chat-stream', async (req, res) => {
     scoreThreshold: req.body?.scoreThreshold != null ? Number(req.body.scoreThreshold) : undefined,
     history: parseHistory(req.body?.history),
     systemPrompt: typeof req.body?.systemPrompt === 'string' ? req.body.systemPrompt.slice(0, 4000) : undefined,
+    docIds: parseDocIds(req.body?.docIds),
+    answerStyle: parseAnswerStyle(req.body?.answerStyle),
   })
 })

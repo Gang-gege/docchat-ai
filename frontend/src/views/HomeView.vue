@@ -38,6 +38,8 @@
           <li>对话页问文档内容（RAG + 引用溯源）</li>
           <li>问「有哪些文档 / 现在几点」（Agent 工具）</li>
           <li>设置里改系统提示词、TopK、多轮与改写</li>
+          <li>对话里可以限定文档范围，并切换简洁 / 提纲回答</li>
+          <li>知识库可收藏、写笔记、生成摘要</li>
           <li>检索实验室做关键词检索对比向量问答</li>
         </ol>
       </div>
@@ -68,6 +70,34 @@
       </div>
 
       <div class="home-panel">
+        <h3>收藏文档</h3>
+        <div v-if="favorites.length" class="recent-list">
+          <button v-for="d in favorites" :key="d.docId" type="button" class="recent-item recent-btn" @click="askDoc(d)">
+            <div class="recent-name">{{ d.name }}</div>
+            <div class="recent-meta">{{ d.summary || '打开后只在这篇文档里提问' }}</div>
+          </button>
+        </div>
+        <el-empty v-else description="在知识库点「收藏」后会出现在这里" :image-size="64" />
+      </div>
+
+      <div class="home-panel">
+        <h3>最近会话</h3>
+        <div v-if="chat.sessions.length" class="recent-list">
+          <button
+            v-for="s in chat.sessions.slice(0, 5)"
+            :key="s.id"
+            type="button"
+            class="recent-item recent-btn"
+            @click="openSession(s.id)"
+          >
+            <div class="recent-name">{{ s.title }}</div>
+            <div class="recent-meta">{{ s.messages.length }} 条消息 · {{ formatTime(s.updatedAt) }}</div>
+          </button>
+        </div>
+        <el-empty v-else description="还没有会话" :image-size="64" />
+      </div>
+
+      <div class="home-panel">
         <h3>最近文档</h3>
         <div v-if="stats?.recentDocs?.length" class="recent-list">
           <div v-for="d in stats.recentDocs" :key="d.name" class="recent-item">
@@ -84,11 +114,14 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { fetchStats } from '../api/docs'
-import type { KnowledgeStats } from '../types'
+import { fetchDocs, fetchStats } from '../api/docs'
+import { useChatStore } from '../stores/chat'
+import type { DocItem, KnowledgeStats } from '../types'
 
 const router = useRouter()
+const chat = useChatStore()
 const stats = ref<KnowledgeStats | null>(null)
+const favorites = ref<DocItem[]>([])
 
 function formatSize(size: number) {
   if (size < 1024) return `${size} B`
@@ -109,9 +142,21 @@ function goAsk(q: string) {
   router.push('/chat')
 }
 
+function askDoc(doc: DocItem) {
+  sessionStorage.setItem('docchat-prefill', doc.summary ? `请展开说明：${doc.summary}` : `「${doc.name}」主要讲了什么？`)
+  sessionStorage.setItem('docchat-scope', JSON.stringify([doc.docId]))
+  router.push('/chat')
+}
+
+function openSession(id: string) {
+  chat.selectSession(id)
+  router.push('/chat')
+}
+
 onMounted(async () => {
-  const res = await fetchStats()
-  stats.value = res.data.data
+  const [statsRes, docsRes] = await Promise.all([fetchStats(), fetchDocs()])
+  stats.value = statsRes.data.data
+  favorites.value = docsRes.data.data.list.filter((item) => item.favorite).slice(0, 5)
 })
 </script>
 
@@ -207,6 +252,16 @@ onMounted(async () => {
 .recent-item {
   padding: 10px 0;
   border-bottom: 1px solid #e8edf3;
+}
+
+.recent-btn {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
 }
 
 .recent-name {

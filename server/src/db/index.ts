@@ -17,6 +17,17 @@ function ensureDir() {
   fs.mkdirSync(root, { recursive: true })
 }
 
+function ensureColumn(database: Database, table: string, column: string, ddl: string) {
+  const stmt = database.prepare(`PRAGMA table_info(${table})`)
+  let exists = false
+  while (stmt.step()) {
+    const row = stmt.getAsObject() as { name?: string }
+    if (row.name === column) exists = true
+  }
+  stmt.free()
+  if (!exists) database.run(`ALTER TABLE ${table} ADD COLUMN ${ddl}`)
+}
+
 export function getDb(): Database {
   if (!db) throw new Error('数据库尚未初始化，请先调用 initDatabase()')
   return db
@@ -43,6 +54,9 @@ export async function initDatabase() {
   }
   const schema = fs.readFileSync(schemaPath, 'utf8')
   db.exec(schema)
+  ensureColumn(db, 'documents', 'summary', "summary TEXT NOT NULL DEFAULT ''")
+  ensureColumn(db, 'documents', 'note', "note TEXT NOT NULL DEFAULT ''")
+  ensureColumn(db, 'documents', 'favorite', 'favorite INTEGER NOT NULL DEFAULT 0')
   persistDb()
   console.log(`[DB] SQLite ready -> ${dbPath}`)
   return db

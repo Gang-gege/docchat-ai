@@ -6,6 +6,9 @@ export interface DocItem {
   chunkCount: number
   createdAt: string
   storagePath?: string
+  summary?: string
+  note?: string
+  favorite?: boolean
 }
 
 export interface Citation {

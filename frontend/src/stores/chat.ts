@@ -65,6 +65,14 @@ export const useChatStore = defineStore('chat', () => {
     return s
   }
 
+  function renameSession(id: string, title: string) {
+    const s = sessions.value.find((item) => item.id === id)
+    if (!s) return
+    s.title = title.trim().slice(0, 40) || '新对话'
+    s.updatedAt = new Date().toISOString()
+    persist()
+  }
+
   function selectSession(id: string) {
     if (!sessions.value.some((s) => s.id === id)) return
     activeId.value = id
@@ -130,6 +138,7 @@ export const useChatStore = defineStore('chat', () => {
     load,
     persist,
     createSession,
+    renameSession,
     selectSession,
     removeSession,
     clearActive,

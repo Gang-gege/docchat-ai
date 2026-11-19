@@ -9,6 +9,9 @@ type DocRow = {
   chunk_count: number
   storage_path: string
   created_at: string
+  summary?: string
+  note?: string
+  favorite?: number
 }
 
 function mapRow(row: DocRow): DocMeta {
@@ -20,6 +23,9 @@ function mapRow(row: DocRow): DocMeta {
     chunkCount: row.chunk_count,
     createdAt: row.created_at,
     storagePath: row.storage_path,
+    summary: row.summary || '',
+    note: row.note || '',
+    favorite: Number(row.favorite || 0) === 1,
   }
 }
 
@@ -79,5 +85,26 @@ export const documentStore = {
     db.run('DELETE FROM chunks')
     db.run('DELETE FROM documents')
     persistDb()
+  },
+  patch(docId: string, fields: { favorite?: boolean; note?: string }) {
+    const current = this.get(docId)
+    if (!current) return undefined
+    const db = getDb()
+    if (typeof fields.favorite === 'boolean') {
+      db.run('UPDATE documents SET favorite = ? WHERE doc_id = ?', [fields.favorite ? 1 : 0, docId])
+    }
+    if (typeof fields.note === 'string') {
+      db.run('UPDATE documents SET note = ? WHERE doc_id = ?', [fields.note.slice(0, 1000), docId])
+    }
+    persistDb()
+    return this.get(docId)
+  },
+  saveSummary(docId: string, summary: string) {
+    const current = this.get(docId)
+    if (!current) return undefined
+    const db = getDb()
+    db.run('UPDATE documents SET summary = ? WHERE doc_id = ?', [summary.slice(0, 800), docId])
+    persistDb()
+    return this.get(docId)
   },
 }
