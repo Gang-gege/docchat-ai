@@ -107,7 +107,7 @@ export async function runChatStream(options: ChatRuntimeOptions, sse: SseWriter,
   if (docIds?.length) {
     sse.send('agent', { thought: `检索范围限定为 ${docIds.length} 篇文档` })
   }
-  let citations = await vectorStore.search(queryVec, topK, docIds)
+  let citations = await vectorStore.search(queryVec, topK, docIds, retrieveQuery)
   // 阈值过高（尤其本地简易向量）会导致「有文档却 0 命中」
   const effectiveThreshold = Math.min(Math.max(scoreThreshold, 0), 0.35)
   if (effectiveThreshold > 0) {

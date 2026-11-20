@@ -99,7 +99,15 @@ export function runEval(topK: number) {
       total: number
       recall: number
       mrr: number
-      rows: Array<{ question: string; expectDoc: string; hit: boolean; rank: number | null; topDoc: string; score: number }>
+      rows: Array<{
+        question: string
+        expectDoc: string
+        hit: boolean
+        rank: number | null
+        topDoc: string
+        score: number
+        hits: Array<{ docName: string; score: number; snippet: string }>
+      }>
     }>
   >('/eval/run', { topK })
 }
@@ -118,6 +126,10 @@ export function deleteWorkflow(id: string) {
 
 export function runWorkflow(body: { steps: WorkflowStep[]; input: string }) {
   return http.post<ApiBody<{ answer: string; logs: Array<{ type: string; output: string }> }>>('/workflows/run', body)
+}
+
+export function runSavedWorkflow(id: string, input: string) {
+  return http.post<ApiBody<{ answer: string; logs: Array<{ type: string; output: string }> }>>(`/workflows/${id}/run`, { input })
 }
 
 export function fetchBackupInfo() {

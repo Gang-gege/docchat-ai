@@ -25,7 +25,7 @@ export async function runWorkflow(steps: WorkflowStep[], seed: string) {
   for (const step of steps) {
     if (step.type === 'search') {
       const query = (step.input || context).trim()
-      const hits = await vectorStore.search(await embedQuery(query), 4, step.docIds)
+      const hits = await vectorStore.search(await embedQuery(query), 4, step.docIds, query)
       context = hits.length
         ? hits.map((hit, index) => `[${index + 1}] ${hit.docName}\n${hit.content}`).join('\n\n')
         : '没有召回到文档片段。'

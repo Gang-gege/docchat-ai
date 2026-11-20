@@ -101,7 +101,7 @@ platformRouter.post('/vector-search', async (req, res, next) => {
     if (!query) throw new AppError(40001, 'query 不能为空', 400)
     const topK = Math.min(Math.max(Number(req.body?.topK) || 4, 1), 12)
     const docIds = Array.isArray(req.body?.docIds) ? (req.body.docIds as string[]) : undefined
-    const hits = await vectorStore.search(await embedQuery(query), topK, docIds)
+    const hits = await vectorStore.search(await embedQuery(query), topK, docIds, query)
     ok(res, {
       query,
       topK,

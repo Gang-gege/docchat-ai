@@ -3,11 +3,22 @@ import { llmConfig } from '../config/runtime.js'
 const DIM = 256
 
 function tokenize(text: string) {
-  return text
+  const parts = text
     .toLowerCase()
-    .replace(/\s+/g, ' ')
     .split(/[^\p{L}\p{N}]+/u)
     .filter(Boolean)
+  const tokens: string[] = []
+  for (const part of parts) {
+    const han = part.match(/[\u4e00-\u9fff]/g)
+    if (han && han.length >= 2) {
+      for (let i = 0; i < han.length - 1; i++) tokens.push(han[i] + han[i + 1])
+    } else if (!han) {
+      tokens.push(part)
+    } else {
+      tokens.push(han[0])
+    }
+  }
+  return tokens
 }
 
 /** 开发兜底：字符哈希袋，保证入库与检索同一空间。正式环境请关闭 USE_LOCAL_EMBEDDING。 */

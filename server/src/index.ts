@@ -10,12 +10,18 @@ import { healthRouter } from './routes/health.js'
 import { platformRouter } from './routes/platform.js'
 import { settingsRouter } from './routes/settings.js'
 import { statsRouter } from './routes/stats.js'
+import { embeddingBackend } from './lib/embeddings.js'
 import { ensureLibrary } from './store/library-store.js'
+import { vectorStore } from './store/vector-store.js'
 
 async function bootstrap() {
   await initDatabase()
   await migrateLegacyJsonIfNeeded()
   ensureLibrary()
+  if (embeddingBackend() === 'local') {
+    const refreshed = await vectorStore.refreshLocalEmbeddings()
+    if (refreshed) console.log(`[embed] 已按中文双字重新向量化 ${refreshed} 条切片`)
+  }
 
   const app = express()
   app.use(cors({ origin: true }))

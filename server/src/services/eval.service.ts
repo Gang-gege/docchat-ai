@@ -17,7 +17,7 @@ function hitIndex(names: string[], contents: string[], expectDoc: string) {
 export async function runEval(cases: EvalInput[], topK: number) {
   const rows = []
   for (const item of cases) {
-    const hits = await vectorStore.search(await embedQuery(item.question), topK)
+    const hits = await vectorStore.search(await embedQuery(item.question), topK, undefined, item.question)
     const index = hitIndex(
       hits.map((hit) => hit.docName),
       hits.map((hit) => hit.content),
@@ -30,6 +30,11 @@ export async function runEval(cases: EvalInput[], topK: number) {
       rank: index >= 0 ? index + 1 : null,
       topDoc: hits[0]?.docName || '',
       score: hits[0]?.score ?? 0,
+      hits: hits.map((hit) => ({
+        docName: hit.docName,
+        score: hit.score,
+        snippet: hit.content.replace(/\s+/g, ' ').slice(0, 90),
+      })),
     })
   }
   const recalled = rows.filter((row) => row.hit).length

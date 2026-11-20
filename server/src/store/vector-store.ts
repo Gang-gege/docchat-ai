@@ -1,5 +1,23 @@
 import { getDb, persistDb } from '../db/index.js'
+import { localEmbed } from '../lib/embeddings.js'
 import type { Citation, VectorChunk } from '../types/index.js'
+
+const EMBED_REV = 'cjk-bigram-1'
+
+function nameBoost(query: string, docName: string, content: string) {
+  const chars = query.match(/[\u4e00-\u9fff]/g) || []
+  const grams: string[] = []
+  for (let i = 0; i < chars.length - 1; i++) grams.push(chars[i] + chars[i + 1])
+  if (!grams.length) return 0
+  const head = content.slice(0, 180)
+  let named = 0
+  let seen = 0
+  for (const gram of grams) {
+    if (docName.includes(gram)) named += 1
+    if (head.includes(gram)) seen += 1
+  }
+  return (named / grams.length) * 0.35 + (seen / grams.length) * 0.12
+}
 
 function cosine(a: number[], b: number[]) {
   let dot = 0
@@ -101,16 +119,38 @@ export const vectorStore = {
     db.run('DELETE FROM chunks WHERE doc_id = ?', [docId])
     persistDb()
   },
-  async search(queryEmbedding: number[], topK: number, docIds?: string[]): Promise<Citation[]> {
+  async refreshLocalEmbeddings() {
+    const db = getDb()
+    db.run('CREATE TABLE IF NOT EXISTS app_meta (k TEXT PRIMARY KEY, v TEXT)')
+    const read = db.prepare(`SELECT v FROM app_meta WHERE k = 'embed_rev'`)
+    let current = ''
+    if (read.step()) current = String((read.getAsObject() as { v?: string }).v || '')
+    read.free()
+    if (current === EMBED_REV) return 0
+    const chunks = readAllChunks()
+    const update = db.prepare('UPDATE chunks SET embedding = ? WHERE id = ?')
+    for (const chunk of chunks) update.run([JSON.stringify(localEmbed(chunk.content)), chunk.id])
+    update.free()
+    db.run(
+      `INSERT INTO app_meta (k, v) VALUES ('embed_rev', ?)
+       ON CONFLICT(k) DO UPDATE SET v = excluded.v`,
+      [EMBED_REV],
+    )
+    persistDb()
+    return chunks.length
+  },
+  async search(queryEmbedding: number[], topK: number, docIds?: string[], query = ''): Promise<Citation[]> {
     const allow = docIds?.length ? new Set(docIds) : null
-    return readAllChunks()
-      .filter((chunk) => !allow || allow.has(chunk.docId))
-      .map((chunk) => ({
-        docId: chunk.docId,
-        docName: chunk.docName,
-        content: chunk.content,
-        score: cosine(queryEmbedding, chunk.embedding),
-      }))
+    const best = new Map<string, Citation>()
+    for (const chunk of readAllChunks()) {
+      if (allow && !allow.has(chunk.docId)) continue
+      const score = cosine(queryEmbedding, chunk.embedding) + nameBoost(query, chunk.docName, chunk.content)
+      const prev = best.get(chunk.docId)
+      if (!prev || score > prev.score) {
+        best.set(chunk.docId, { docId: chunk.docId, docName: chunk.docName, content: chunk.content, score })
+      }
+    }
+    return [...best.values()]
       .sort((a, b) => b.score - a.score)
       .slice(0, topK)
   },
