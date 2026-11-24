@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { fetchSettings } from '../api/docs'
 import { DEFAULT_SYSTEM_PROMPT } from '../constants/prompts'
 
@@ -53,6 +53,8 @@ export const useSettingsStore = defineStore('settings', () => {
       /* ignore */
     }
   }
+
+  watch([enableAgent, enableRewrite, enableMultiTurn], () => persist())
 
   async function hydrate() {
     loadLocal()

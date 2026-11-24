@@ -338,6 +338,7 @@ npm run dev
 | [docs/api.md](./docs/api.md) | 接口文档 |
 | [docs/development-plan.md](./docs/development-plan.md) | 开发计划 |
 | [docs/resume.md](./docs/resume.md) | 简历项目描述 |
+| [docs/guide.md](./docs/guide.md) | 给前端看的用法和原理 |
 | [docs/notes.md](./docs/notes.md) | 注意事项与踩坑 |
 
 ## 部署建议

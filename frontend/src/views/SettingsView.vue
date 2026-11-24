@@ -54,6 +54,7 @@
 
       <div class="settings-panel">
         <h3>对话能力</h3>
+        <p class="field-tip">和对话页、右下角机器人是同一组开关，拨动后立即记住。</p>
         <div class="switch-list">
           <div class="switch-row">
             <div>

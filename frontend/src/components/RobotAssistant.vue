@@ -130,8 +130,18 @@
           />
           <div class="composer-bar">
             <div class="pills">
-              <button type="button" class="pill" :class="{ on: memory }" @click="memory = !memory">多轮记忆</button>
-              <button type="button" class="pill" :class="{ on: rewrite }" @click="rewrite = !rewrite">查询改写</button>
+              <button type="button" class="pill" :class="{ on: settings.enableMultiTurn }" @click="settings.enableMultiTurn = !settings.enableMultiTurn">
+                多轮记忆
+              </button>
+              <button
+                type="button"
+                class="pill"
+                :class="{ on: settings.enableRewrite }"
+                :disabled="!settings.enableMultiTurn"
+                @click="settings.enableRewrite = !settings.enableRewrite"
+              >
+                查询改写
+              </button>
             </div>
             <button
               v-if="sending"
@@ -201,10 +211,8 @@ const fabTop = ref(0)
 const panelLeft = ref(12)
 const panelTop = ref(12)
 const dragKind = ref<DragKind>(null)
-const mode = ref<Mode>('knowledge')
+const mode = computed<Mode>(() => (settings.enableAgent ? 'agent' : 'knowledge'))
 const modeMenu = ref(false)
-const memory = ref(true)
-const rewrite = ref(true)
 const draft = ref('')
 const sending = ref(false)
 const stage = ref('')
@@ -310,14 +318,8 @@ function loadThread() {
     const raw = localStorage.getItem(THREAD_KEY)
     if (!raw) return
     const data = JSON.parse(raw) as {
-      mode?: Mode
-      rewrite?: boolean
-      memory?: boolean
       messages?: ChatMessage[]
     }
-    if (data.mode === 'knowledge' || data.mode === 'agent') mode.value = data.mode
-    if (typeof data.rewrite === 'boolean') rewrite.value = data.rewrite
-    if (typeof data.memory === 'boolean') memory.value = data.memory
     if (Array.isArray(data.messages)) {
       messages.value = data.messages.map((item) => ({ ...item, streaming: false, stage: undefined }))
     }
@@ -332,9 +334,6 @@ function persistThread() {
     localStorage.setItem(
       THREAD_KEY,
       JSON.stringify({
-        mode: mode.value,
-        rewrite: rewrite.value,
-        memory: memory.value,
         messages: messages.value.map((item) => ({ ...item, streaming: false, stage: undefined })),
       }),
     )
@@ -449,9 +448,8 @@ function onKeyDown(event: KeyboardEvent) {
 }
 
 function pickMode(next: Mode) {
-  mode.value = next
+  settings.enableAgent = next === 'agent'
   modeMenu.value = false
-  persistThread()
 }
 
 function folded(id: string, kind: 'agent' | 'cites') {
@@ -518,7 +516,7 @@ async function continueInChat() {
 }
 
 function historyForApi() {
-  if (!memory.value) return []
+  if (!settings.enableMultiTurn) return []
   return messages.value
     .filter((item) => !item.streaming && item.content)
     .slice(-8)
@@ -553,7 +551,7 @@ async function send() {
   if (!text || sending.value) return
   draft.value = ''
   sending.value = true
-  stage.value = mode.value === 'agent' ? 'agent' : 'retrieve'
+  stage.value = settings.enableAgent ? 'agent' : 'retrieve'
   stick.value = true
 
   const history = historyForApi()
@@ -594,8 +592,8 @@ async function send() {
       question: text,
       topK: settings.topK,
       temperature: settings.temperature,
-      enableAgent: mode.value === 'agent',
-      enableRewrite: rewrite.value,
+      enableAgent: settings.enableAgent,
+      enableRewrite: settings.enableRewrite && settings.enableMultiTurn,
       scoreThreshold: settings.scoreThreshold,
       history,
       systemPrompt: settings.systemPrompt,
@@ -653,8 +651,6 @@ async function send() {
     },
   )
 }
-
-watch([memory, rewrite], () => persistThread())
 
 watch(open, async (visible) => {
   if (!visible) {
@@ -1169,6 +1165,11 @@ onBeforeUnmount(() => {
   border-color: color-mix(in srgb, var(--brand) 35%, transparent);
   background: var(--brand-soft);
   color: var(--brand);
+}
+
+.pill:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .send-btn {

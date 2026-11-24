@@ -34,44 +34,41 @@
           </div>
         </button>
       </div>
+      <div v-if="chat.activeSession" class="session-foot">
+        <label for="session-tags">标签</label>
+        <el-input
+          id="session-tags"
+          v-model="tagText"
+          size="small"
+          placeholder="逗号分隔，回车保存"
+          @change="saveTags(tagText)"
+        />
+        <el-button v-if="showArchived" text size="small" @click="chat.removeArchived()">清理归档</el-button>
+      </div>
     </aside>
 
     <div class="chat-main">
       <header class="chat-header">
-        <div>
-          <h1 class="page-title">知识库对话</h1>
-          <p class="chat-subtitle">可限定文档、切换简洁 / 标准 / 提纲 / 详解，会话可归档、打标签并导出。</p>
-        </div>
+        <h1 class="page-title">知识库对话</h1>
         <div class="chat-actions">
-          <el-button text @click="exportMd">导出 MD</el-button>
-          <el-button text @click="exportJson">导出 JSON</el-button>
-          <el-button text @click="chat.removeArchived()">清理归档</el-button>
-          <el-button text @click="chat.clearActive()">清空</el-button>
           <el-button v-if="sending" type="danger" plain size="small" @click="stop">停止</el-button>
+          <el-dropdown trigger="click">
+            <el-button text>更多</el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item @click="exportMd">导出 Markdown</el-dropdown-item>
+                <el-dropdown-item @click="exportJson">导出 JSON</el-dropdown-item>
+                <el-dropdown-item @click="chat.clearActive()">清空当前会话</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
       </header>
-
-      <div class="chat-tools">
-        <el-input v-model="tagText" placeholder="会话标签，用逗号分隔" style="width: 180px" @change="saveTags(tagText)" />
-        <el-segmented v-model="answerStyle" :options="styleOptions" />
-        <el-select
-          v-model="scopeIds"
-          multiple
-          collapse-tags
-          collapse-tags-tooltip
-          clearable
-          filterable
-          placeholder="检索范围：全部文档"
-          class="scope-select"
-        >
-          <el-option v-for="doc in library" :key="doc.docId" :label="doc.name" :value="doc.docId" />
-        </el-select>
-      </div>
 
       <div class="chat-log" ref="logRef">
         <div v-if="!chat.messages.length" class="chat-empty">
           <h3>开始提问</h3>
-          <p>直接输入问题即可，支持多轮追问。</p>
+          <p>在下方选择问法，再输入问题。</p>
         </div>
 
         <div v-for="msg in chat.messages" :key="msg.id" class="msg-row" :class="msg.role">
@@ -119,18 +116,113 @@
         <div v-if="stageText" class="stage-pill">{{ stageText }}</div>
       </div>
 
-      <div class="composer-wrap">
-        <el-input
-          v-model="question"
-          type="textarea"
-          :rows="2"
-          resize="none"
-          placeholder="输入问题，Enter 发送，Shift+Enter 换行"
-          @keydown.enter.exact.prevent="send"
-        />
-        <el-button type="primary" class="send-btn" :loading="sending" :disabled="sending" @click="send">
-          发送
-        </el-button>
+      <div class="composer">
+        <div class="composer-card">
+          <textarea
+            v-model="question"
+            rows="2"
+            placeholder="输入问题，Enter 发送，Shift+Enter 换行"
+            @focus="openMenu = ''"
+            @keydown.enter.exact.prevent="send"
+          />
+          <div class="composer-bar">
+            <div class="composer-pills">
+              <div class="pill-menu">
+                <button type="button" class="pill is-on" title="切换问答方式" @click="toggleMenu('mode')">
+                  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3.2h10v6.6H6.4L3 12.2V3.2z" /></svg>
+                  {{ settings.enableAgent ? '智能体' : '知识问答' }}
+                  <i class="caret" />
+                </button>
+                <div v-if="openMenu === 'mode'" class="pill-pop">
+                  <button type="button" :class="{ active: !settings.enableAgent }" @click="pickMode(false)">
+                    <strong>知识问答</strong>
+                    <small>只根据文档回答</small>
+                  </button>
+                  <button type="button" :class="{ active: settings.enableAgent }" @click="pickMode(true)">
+                    <strong>智能体</strong>
+                    <small>可查时间、文档数量</small>
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                class="pill"
+                :class="{ 'is-on': settings.enableMultiTurn }"
+                title="带上最近几轮，可以接着追问"
+                @click="settings.enableMultiTurn = !settings.enableMultiTurn"
+              >
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 5.5h7.5V10H5.2L2.5 12.2V5.5zM6 3.5h7.5V8" /></svg>
+                多轮
+              </button>
+              <button
+                type="button"
+                class="pill"
+                :class="{ 'is-on': settings.enableRewrite && settings.enableMultiTurn }"
+                :disabled="!settings.enableMultiTurn"
+                title="有上文时，先把追问改写成完整检索句"
+                @click="settings.enableRewrite = !settings.enableRewrite"
+              >
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 3.2l1.8 1.8L6.2 11.6H4.4V9.8L11 3.2zM9.4 4.8l1.8 1.8" /></svg>
+                改写
+              </button>
+
+              <div class="pill-menu">
+                <button type="button" class="pill" title="回答风格" @click="toggleMenu('style')">
+                  {{ styleLabel }}
+                  <i class="caret" />
+                </button>
+                <div v-if="openMenu === 'style'" class="pill-pop">
+                  <button
+                    v-for="item in styleOptions"
+                    :key="item.value"
+                    type="button"
+                    :class="{ active: answerStyle === item.value }"
+                    @click="pickStyle(item.value)"
+                  >
+                    <strong>{{ item.label }}</strong>
+                  </button>
+                </div>
+              </div>
+
+              <div class="pill-menu">
+                <button
+                  type="button"
+                  class="pill"
+                  :class="{ 'is-on': scopeIds.length }"
+                  title="限定检索的文档，不选就是全部"
+                  @click="toggleMenu('scope')"
+                >
+                  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.8h5.2L12 5.6v7.6H4V2.8zM9.2 2.8V5.6H12" /></svg>
+                  {{ scopeLabel }}
+                  <i class="caret" />
+                </button>
+                <div v-if="openMenu === 'scope'" class="pill-pop scope-pop">
+                  <button type="button" :class="{ active: !scopeIds.length }" @click="scopeIds = []">
+                    <strong>全部文档</strong>
+                  </button>
+                  <label v-for="doc in library" :key="doc.docId" class="scope-row" :title="doc.name">
+                    <input v-model="scopeIds" type="checkbox" :value="doc.docId" />
+                    <span>{{ doc.name }}</span>
+                  </label>
+                  <p v-if="!library.length" class="scope-empty">知识库还没有文档</p>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              class="composer-send"
+              :class="{ busy: sending }"
+              :disabled="!sending && !question.trim()"
+              :title="sending ? '停止' : '发送'"
+              @click="sending ? stop() : send()"
+            >
+              <span v-if="sending" class="stop-sq" />
+              <svg v-else viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 8h11M9 3.5L13.5 8 9 12.5" /></svg>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -152,6 +244,7 @@ const question = ref('')
 const sending = ref(false)
 const currentStage = ref('')
 const logRef = ref<HTMLElement>()
+const openMenu = ref<'' | 'mode' | 'style' | 'scope'>('')
 const library = ref<DocItem[]>([])
 const scopeIds = ref<string[]>([])
 const answerStyle = ref<'brief' | 'standard' | 'outline' | 'detail'>('standard')
@@ -165,6 +258,15 @@ const styleOptions = [
   { label: '提纲', value: 'outline' },
   { label: '详解', value: 'detail' },
 ]
+const styleLabel = computed(() => styleOptions.find((item) => item.value === answerStyle.value)?.label || '标准')
+const scopeLabel = computed(() => {
+  if (!scopeIds.value.length) return '全部'
+  if (scopeIds.value.length === 1) {
+    const name = library.value.find((doc) => doc.docId === scopeIds.value[0])?.name || '1 篇'
+    return name.length > 10 ? `${name.slice(0, 10)}…` : name
+  }
+  return `${scopeIds.value.length} 篇`
+})
 const visibleSessions = computed(() => chat.sessions.filter((item) => Boolean(item.archived) === showArchived.value))
 let stopStream: null | (() => void) = null
 let lastUserQuestion = ''
@@ -198,6 +300,26 @@ function uid() {
 async function scrollBottom() {
   await nextTick()
   if (logRef.value) logRef.value.scrollTop = logRef.value.scrollHeight
+}
+
+function toggleMenu(name: 'mode' | 'style' | 'scope') {
+  openMenu.value = openMenu.value === name ? '' : name
+}
+
+function pickMode(agent: boolean) {
+  settings.enableAgent = agent
+  openMenu.value = ''
+}
+
+function pickStyle(value: 'brief' | 'standard' | 'outline' | 'detail') {
+  answerStyle.value = value
+  openMenu.value = ''
+}
+
+function onDocPointer(event: PointerEvent) {
+  const target = event.target
+  if (target instanceof Element && target.closest('.pill-menu')) return
+  openMenu.value = ''
 }
 
 function startRename(id: string, title: string) {
@@ -373,9 +495,13 @@ async function send() {
   )
 }
 
-watch(scopeIds, (ids) => {
-  if (chat.activeId) chat.patchSession(chat.activeId, { docIds: [...ids] })
-})
+watch(
+  scopeIds,
+  (ids) => {
+    if (chat.activeId) chat.patchSession(chat.activeId, { docIds: [...ids] })
+  },
+  { deep: true },
+)
 
 watch(
   () => chat.activeId,
@@ -387,6 +513,7 @@ watch(
 )
 
 onMounted(async () => {
+  window.addEventListener('pointerdown', onDocPointer)
   const prefill = sessionStorage.getItem('docchat-prefill')
   if (prefill) {
     question.value = prefill
@@ -414,18 +541,211 @@ onMounted(async () => {
   }
 })
 
-onBeforeUnmount(() => stop())
+onBeforeUnmount(() => {
+  stop()
+  window.removeEventListener('pointerdown', onDocPointer)
+})
 </script>
 
 <style scoped>
-.chat-tools {
-  display: flex;
-  gap: 10px;
+.chat-header {
   align-items: center;
-  padding: 12px 0 4px;
 }
-.scope-select {
-  width: 280px;
+.session-foot {
+  border-top: 1px solid var(--line);
+  margin-top: 8px;
+  padding-top: 10px;
+}
+.session-foot label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.composer {
+  padding-top: 8px;
+  padding-right: 72px;
+}
+.composer-card {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel, #fff);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+.composer-card textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 52px;
+  max-height: 140px;
+  margin: 0;
+  padding: 12px 14px 4px;
+  border: 0;
+  resize: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.composer-card textarea::placeholder {
+  color: var(--muted);
+}
+.composer-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 4px 8px 8px;
+}
+.composer-pills {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.pill-menu {
+  position: relative;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+.pill svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.pill.is-on {
+  border-color: color-mix(in srgb, var(--brand) 35%, transparent);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.pill:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.caret {
+  width: 0;
+  height: 0;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-top: 4px solid currentColor;
+  opacity: 0.7;
+}
+.pill-pop {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 20;
+  min-width: 148px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel, #fff);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+}
+.pill-pop > button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pill-pop > button small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.pill-pop > button.active,
+.pill-pop > button:hover {
+  background: var(--brand-soft);
+}
+.scope-pop {
+  width: 260px;
+  max-height: 240px;
+  overflow: auto;
+}
+.scope-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.scope-row:hover {
+  background: var(--brand-soft);
+}
+.scope-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scope-empty {
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.composer-send {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--brand);
+  color: #fff;
+  cursor: pointer;
+}
+.composer-send svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.composer-send:disabled {
+  background: #cbd5e1;
+  cursor: not-allowed;
+}
+.composer-send.busy {
+  background: #b91c1c;
+}
+.stop-sq {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: #fff;
 }
 .session-rename {
   width: 100%;
